@@ -2,53 +2,39 @@ name: Recordatorio mensual
 
 on:
   schedule:
+    # 11:00 UTC = 08:00 Paraguay (UTC-3). GitHub puede retrasar la ejecución.
     - cron: '0 11 7 * *'
   workflow_dispatch:
-  
+    inputs:
+      modo:
+        description: Validar sin entregar, o enviar una prueba al Xiaomi
+        type: choice
+        options: [validar, enviar-prueba]
+        default: validar
+
 permissions:
-  contents: read
+  contents: write # Registro mensual de envío; nunca contiene datos financieros ni secretos.
+concurrency:
+  group: recordatorio-mensual
+  cancel-in-progress: false
 
 jobs:
   enviar-recordatorio:
-    runs-on: ubuntu-latest
-
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
-      - name: Preparar Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-
-      - name: Instalar dependencias
-        run: pip install firebase-admin
-
-      - name: Enviar notificación al Xiaomi
+      - name: Instalar dependencia fijada
+        run: python -m pip install firebase-admin==7.7.0
+      - name: Validar o enviar recordatorio
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           FCM_TOKEN: ${{ secrets.FCM_TOKEN }}
-        run: |
-          python - <<'PY'
-          import os
-          import json
-          import firebase_admin
-          from firebase_admin import credentials, messaging
-
-          cuenta = json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"])
-          firebase_admin.initialize_app(
-              credentials.Certificate(cuenta)
-          )
-          mensaje = messaging.Message(
-              token=os.environ["FCM_TOKEN"],
-              notification=messaging.Notification(
-                  title="🔔 Recordatorio de aporte mensual",
-                  body="Hoy es día de realizar tu aporte al fondo de inversión. ¡Cada aporte te acerca a tu meta!"
-              )
-          )
-          mensaje = messaging.Message(
-              token=os.environ["FCM_TOKEN"],
-              notification=messaging.Notification(
-                  title="🔔 Recordatorio de aporte mensual",
-                  body="Hoy es día de realizar tu aporte al fondo de inversión. ¡Cada aporte te acerca a tu meta!"
-              ),
-             
-          print("Notificación enviada a Firebase correctamente")
-          PY
+          GITHUB_TOKEN: ${{ github.token }}
+          MODO: ${{ inputs.modo || 'mensual' }}
+        run: python scripts/enviar_recordatorio.py

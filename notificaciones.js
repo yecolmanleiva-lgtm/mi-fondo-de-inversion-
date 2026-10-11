@@ -10,61 +10,49 @@ const firebaseConfig = {
 const vapidKey =
   "BHiiODbBiqwKxqh6b6G7dCsLF1y-R7jMWs2iSJR2IGQbhP7d2Q-MavJ5uljteoJkJxuVZA-CwnoVMO5hBlr1tJ0";
 
+let messagingPromise;
+function prepararMensajeria() {
+  if (!messagingPromise) messagingPromise = (async () => {
+    const [{ initializeApp, getApps }, { getMessaging, getToken, onMessage }] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"),
+      import("https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging.js")
+    ]);
+    const app = getApps().find(app => app.options.appId === firebaseConfig.appId) || initializeApp(firebaseConfig);
+    const messaging = getMessaging(app);
+    onMessage(messaging, async payload => {
+      const registro = await navigator.serviceWorker.ready;
+      const data = payload.data?.id ? payload.data : {
+        id: payload.messageId, title: payload.notification?.title,
+        body: payload.notification?.body, url: new URL("./", location.href).href
+      };
+      // El SW existente muestra y deduplica; no crear una segunda notificación aquí.
+      registro.active?.postMessage({ type: "PUSH", data });
+    });
+    return { messaging, getToken };
+  })().catch(error => { messagingPromise = null; throw error; });
+  return messagingPromise;
+}
 async function activarNotificaciones() {
   try {
     if (!("Notification" in window) || !("serviceWorker" in navigator)) {
-      alert("Este dispositivo no admite notificaciones.");
-      return;
+      alert("Este dispositivo no admite notificaciones."); return;
     }
-
-    const permiso = await Notification.requestPermission();
-
-    if (permiso !== "granted") {
-      alert("No se concedió permiso para las notificaciones.");
-      return;
+    if (await Notification.requestPermission() !== "granted") {
+      alert("No se concedió permiso para las notificaciones."); return;
     }
-
-    const { initializeApp } = await import(
-      "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"
-    );
-
-    const { getMessaging, getToken } = await import(
-      "https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging.js"
-    );
-
-    const app = initializeApp(firebaseConfig);
-    const messaging = getMessaging(app);
-
+    const { messaging, getToken } = await prepararMensajeria();
     const registro = await navigator.serviceWorker.ready;
-
-    const token = await getToken(messaging, {
-      vapidKey,
-      serviceWorkerRegistration: registro
-    });
-
-    if (!token) {
-      alert("No se pudo registrar este dispositivo.");
-      return;
+    const token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: registro });
+    if (!token) throw new Error("Sin token");
+    if (confirm("Permiso activado. ¿Copiar el identificador para actualizar FCM_TOKEN en GitHub?")) {
+      await navigator.clipboard.writeText(token);
+      alert("Identificador copiado. Guardalo únicamente en el secreto FCM_TOKEN de GitHub.");
     }
-
-    alert("¡Notificaciones activadas correctamente!");
-    console.log("Token FCM:", token);
-    const copiar = confirm(
-  "¿Querés copiar el identificador de este celular para probar las notificaciones?"
-);
-
-if (copiar) {
-  try {
-    await navigator.clipboard.writeText(token);
-    alert("¡Identificador copiado!");
-  } catch (error) {
-    alert("No se pudo copiar el identificador.");
+  } catch {
+    alert("No se pudo completar la activación o copia. Comprobá la conexión y los permisos.");
   }
 }
-  } catch (error) {
-    console.error("Error al activar notificaciones:", error);
-    alert("No se pudieron activar las notificaciones.");
-  }
-}
-
 window.activarNotificaciones = activarNotificaciones;
+if ("Notification" in window && "serviceWorker" in navigator && Notification.permission === "granted") {
+  prepararMensajeria().catch(() => console.warn("Recepción en primer plano no disponible; comprobá la conexión."));
+}
