@@ -49,6 +49,18 @@ async function activarNotificaciones() {
 
     alert("¡Notificaciones activadas correctamente!");
     console.log("Token FCM:", token);
+    const copiar = confirm(
+  "¿Querés copiar el identificador de este celular para probar las notificaciones?"
+);
+
+if (copiar) {
+  try {
+    await navigator.clipboard.writeText(token);
+    alert("¡Identificador copiado!");
+  } catch (error) {
+    alert("No se pudo copiar el identificador.");
+  }
+}
   } catch (error) {
     console.error("Error al activar notificaciones:", error);
     alert("No se pudieron activar las notificaciones.");
