@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Comprobar notificaciones</title>
+<style>body{font:18px system-ui;max-width:36rem;margin:32px auto;padding:20px;color:#063f38}button{font:inherit;padding:16px;background:#063f38;color:white;border:0;border-radius:12px}pre{white-space:pre-wrap;font:inherit}</style>
+<h1>Comprobar este teléfono</h1>
+<p>Esta comprobación no borra ni modifica tus aportes.</p>
+<button id="comprobar">Mostrar código de comprobación</button><pre id="resultado" role="status"></pre>
+<script src="./notificaciones.js"></script>
+<script>
+document.getElementById('comprobar').onclick=async()=>{
+ const result=document.getElementById('resultado'); result.textContent='Comprobando…';
+ try {
+  if(!('Notification' in window)||Notification.permission!=='granted') {result.textContent='Las notificaciones no tienen permiso en este navegador.';return;}
+  const registration=await navigator.serviceWorker.getRegistration(new URL('./',location.href));
+  if(!registration?.active) {result.textContent='No hay un receptor activo. Abrí primero la aplicación.';return;}
+  const {messaging,getToken}=await prepararMensajeria();
+  const token=await getToken(messaging,{vapidKey,serviceWorkerRegistration:registration});
+  if(!token) throw new Error('sin-token');
+  const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token.trim()));
+  const code=Array.from(new Uint8Array(hash),x=>x.toString(16).padStart(2,'0')).join('').slice(0,12);
+  result.textContent='Código: '+code+'\nPermiso: concedido\nReceptor: '+registration.active.state+'\nRuta: '+new URL(registration.active.scriptURL).pathname+(registration.waiting?'\nHay una actualización pendiente.':'');
+ } catch {result.textContent='No se pudo comprobar. Revisá que haya Internet e intentá otra vez.';}
+};
+</script></html>

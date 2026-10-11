@@ -1,5 +1,6 @@
 """Un único destinatario. Nunca imprimir credenciales, tokens ni errores completos."""
 import base64
+import hashlib
 import json
 import os
 import sys
@@ -72,6 +73,8 @@ def main():
         raise ValueError("La cuenta de servicio pertenece a otro proyecto")
     if not token or any(c.isspace() for c in token):
         raise ValueError("FCM_TOKEN vacío o con espacios internos")
+    if dry_run:
+        print("Código de comparación del destinatario: " + hashlib.sha256(token.encode()).hexdigest()[:12])
     initialize_app(credentials.Certificate(account))
     # token es correcto para getToken(); NO sustituirlo por fid: son identificadores distintos.
     message = messaging.Message(token=token, data={
