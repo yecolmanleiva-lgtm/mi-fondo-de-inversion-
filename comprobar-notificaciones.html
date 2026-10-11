@@ -5,6 +5,7 @@
 <h1>Comprobar este teléfono</h1>
 <p>Esta comprobación no borra ni modifica tus aportes.</p>
 <button id="comprobar">Mostrar código de comprobación</button><pre id="resultado" role="status"></pre>
+<p><button id="prueba-local">Probar aviso en este teléfono</button></p><pre id="resultado-local" role="status"></pre>
 <script src="./notificaciones.js"></script>
 <script>
 document.getElementById('comprobar').onclick=async()=>{
@@ -20,5 +21,26 @@ document.getElementById('comprobar').onclick=async()=>{
   const code=Array.from(new Uint8Array(hash),x=>x.toString(16).padStart(2,'0')).join('').slice(0,12);
   result.textContent='Código: '+code+'\nPermiso: concedido\nReceptor: '+registration.active.state+'\nRuta: '+new URL(registration.active.scriptURL).pathname+(registration.waiting?'\nHay una actualización pendiente.':'');
  } catch {result.textContent='No se pudo comprobar. Revisá que haya Internet e intentá otra vez.';}
+};
+document.getElementById('prueba-local').onclick=async()=>{
+ const button=document.getElementById('prueba-local');
+ const result=document.getElementById('resultado-local');
+ button.disabled=true; result.textContent='Probando el receptor del teléfono…';
+ try {
+  if(!('Notification' in window)||Notification.permission!=='granted') {
+   result.textContent='Falta permiso de notificaciones en este navegador.'; return;
+  }
+  const registration=await navigator.serviceWorker.getRegistration(new URL('./',location.href));
+  if(!registration?.active) {result.textContent='No hay receptor activo.';return;}
+  const id='diagnostico-'+crypto.randomUUID();
+  registration.active.postMessage({type:'PUSH',data:{id,title:'Prueba local de Mi Fondo',body:'Este aviso comprueba el receptor del teléfono; no pasó por Firebase.',url:new URL('./',location.href).href}});
+  await new Promise(resolve=>setTimeout(resolve,2000));
+  const notifications=await registration.getNotifications({tag:id});
+  result.textContent=notifications.length
+   ? 'El navegador creó el aviso. Revisá la barra de notificaciones y decime si ves «Prueba local de Mi Fondo».'
+   : 'El receptor no registró el aviso en 2 segundos. Decime si llegó a aparecer.';
+  if(registration.waiting) result.textContent+=' Hay una actualización del receptor pendiente.';
+ } catch { result.textContent='La prueba local falló. Avisame este resultado.'; }
+ finally {button.disabled=false;}
 };
 </script></html>
