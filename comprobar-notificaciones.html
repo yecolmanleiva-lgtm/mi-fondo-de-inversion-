@@ -6,6 +6,9 @@
 <p>Esta comprobación no borra ni modifica tus aportes.</p>
 <button id="comprobar">Mostrar código de comprobación</button><pre id="resultado" role="status"></pre>
 <p><button id="prueba-local">Probar aviso en este teléfono</button></p><pre id="resultado-local" role="status"></pre>
+<hr><h2>Renovar el identificador</h2><p>Usar cuando Firebase indique «no registrado». Después hay que actualizar el secreto FCM_TOKEN de GitHub.</p>
+<button id="renovar">Renovar identificador</button> <button id="copiar-nuevo" disabled>Copiar identificador nuevo</button>
+<pre id="resultado-renovar" role="status"></pre>
 <script src="./notificaciones.js"></script>
 <script>
 document.getElementById('comprobar').onclick=async()=>{
@@ -42,5 +45,29 @@ document.getElementById('prueba-local').onclick=async()=>{
   if(registration.waiting) result.textContent+=' Hay una actualización del receptor pendiente.';
  } catch { result.textContent='La prueba local falló. Avisame este resultado.'; }
  finally {button.disabled=false;}
+};
+let tokenRenovado='';
+document.getElementById('renovar').onclick=async()=>{
+ if(!confirm('Esto renueva solo las notificaciones. Después debés copiar el identificador nuevo a FCM_TOKEN en GitHub. ¿Continuar?'))return;
+ const button=document.getElementById('renovar'), result=document.getElementById('resultado-renovar');
+ button.disabled=true; document.getElementById('copiar-nuevo').disabled=true;tokenRenovado='';
+ result.textContent='Renovando…';
+ try {
+  if(Notification.permission!=='granted')throw new Error('permiso');
+  const registration=await navigator.serviceWorker.getRegistration(new URL('./',location.href));
+  if(!registration?.active)throw new Error('receptor');
+  const {messaging,getToken}=await prepararMensajeria();
+  const {deleteToken}=await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging.js');
+  await deleteToken(messaging);
+  tokenRenovado=await getToken(messaging,{vapidKey,serviceWorkerRegistration:registration});
+  if(!tokenRenovado)throw new Error('token');
+  document.getElementById('copiar-nuevo').disabled=false;
+  result.textContent='Renovado. Tocá «Copiar identificador nuevo» y pegalo únicamente en el secreto FCM_TOKEN de GitHub.';
+ }catch{result.textContent='No se pudo completar la renovación. Comprobá Internet y el permiso de notificaciones.';}
+ finally{button.disabled=false;}
+};
+document.getElementById('copiar-nuevo').onclick=async()=>{
+ try{await navigator.clipboard.writeText(tokenRenovado);document.getElementById('resultado-renovar').textContent='Copiado. Actualizá FCM_TOKEN en GitHub. No lo pegues en el chat.';}
+ catch{document.getElementById('resultado-renovar').textContent='No se pudo copiar. Volvé a tocar «Copiar identificador nuevo».';}
 };
 </script></html>
