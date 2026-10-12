@@ -47,9 +47,7 @@ jobs:
           target: google_apis
           disable-animations: true
           working-directory: android
-          script: |
-            ./gradlew --no-daemon connectedDebugAndroidTest
-            adb exec-out run-as py.mifondo.personal cat cache/ui-offline.png > app/build/ui-offline.png
+          script: ./gradlew --no-daemon connectedDebugAndroidTest
       - name: Preparar herramienta de firma local
         run: cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" android/app/build/apksigner.jar
       - name: Guardar APK y resultados
@@ -64,4 +62,3 @@ jobs:
             android/app/build/reports/androidTests/
             android/app/build/outputs/androidTest-results/
             android/app/build/apksigner.jar
-            android/app/build/ui-offline.png
