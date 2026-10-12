@@ -1,0 +1,23 @@
+import 'fake-indexeddb/auto';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readLocal,changeLocal} from '../src/local-store.mjs';
+import {localParts,validateBackup,total} from '../functions/domain.mjs';
+const entry={id:'local-test-00001',amount:1250000,date:localParts().date,period:localParts().month,note:'Prueba de persistencia local'};
+test('uso personal inicializa vacío, sin cuenta y con plan el día 7 a las 08:00',async()=>{const p=await readLocal();assert.equal(p.entries.length,0);assert.equal(p.settings.enabled,false);assert.equal(p.settings.day,7);assert.equal(p.settings.time,'08:00');});
+test('guarda en IndexedDB y recupera al reabrir la base',async()=>{let p=await readLocal();await changeLocal('saveEntry',entry,p.revision);p=await readLocal();assert.equal(p.entries[0].amount,1250000);assert.equal(p.revision,1);});
+test('dos ventanas no pueden sobrescribir la misma revisión',async()=>{const p=await readLocal();const results=await Promise.allSettled([changeLocal('saveEntry',{...entry,amount:1300000},p.revision),changeLocal('saveEntry',{...entry,amount:1400000},p.revision)]);assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.equal((await readLocal()).revision,p.revision+1);});
+test('una restauración inválida no borra la copia local',async()=>{const p=await readLocal();await assert.rejects(()=>changeLocal('restore',{version:1,entries:[{amount:-1}],settings:p.settings},p.revision));assert.deepEqual(await readLocal(),p);});
+test('no presenta recordatorios activados cuando solo existe almacenamiento local',async()=>{const p=await readLocal();await changeLocal('settings',{...p.settings,enabled:true},p.revision);assert.equal((await readLocal()).settings.enabled,false);});
+test('eliminar actualiza la base persistente',async()=>{const p=await readLocal();await changeLocal('deleteEntry',{id:entry.id},p.revision);assert.equal((await readLocal()).entries.length,0);});
+test('respaldo anterior conserva aportes, valoración y calendario al restaurar y exportar',async()=>{
+  const p=await readLocal();
+  const backup={version:1,exportedAt:'2026-10-01T12:00:00.000Z',entries:[entry],settings:{...p.settings,fundName:'Fondo importado',monthly:1500000,goal:15000000,day:31,time:'17:30',advance:3,pending:true,enabled:true,valuation:1600000,valuationDate:entry.date}};
+  await changeLocal('restore',backup,p.revision);
+  const restored=await readLocal();
+  assert.deepEqual(restored.entries,backup.entries);
+  assert.deepEqual(restored.settings,{...backup.settings,enabled:false});
+  const exported=JSON.parse(JSON.stringify({version:1,exportedAt:new Date().toISOString(),settings:restored.settings,entries:restored.entries}));
+  assert.deepEqual(validateBackup(exported),{settings:restored.settings,entries:restored.entries});
+  assert.equal(total(exported.entries),1250000);
+});
